@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GTA Opcode Browser</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base:      #0d1117;
+            --bg-surface:   #161b22;
+            --bg-card:      #1c2330;
+            --bg-card-hov:  #212c3d;
+            --border:       rgba(48, 100, 60, 0.45);
+            --border-hov:   rgba(72, 185, 100, 0.7);
+            --accent:       #3fb950;
+            --accent-dim:   #2ea043;
+            --accent-soft:  rgba(63, 185, 80, 0.08);
+            --text-primary: #e6edf3;
+            --text-secondary:#8b949e;
+            --text-muted:   #484f58;
+            --text-green:   #3fb950;
+            --text-amber:   #e3b341;
+            --text-cyan:    #79c0ff;
+            --text-purple:  #d2a8ff;
+            --red:          #f85149;
+            --red-soft:     rgba(248, 81, 73, 0.1);
+            --radius-card:  14px;
+            --radius-pill:  100px;
+            --shadow-card:  0 1px 3px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.3);
+            --shadow-hov:   0 4px 24px rgba(63,185,80,0.15), 0 1px 3px rgba(0,0,0,0.5);
+            --font-mono:    'JetBrains Mono', monospace;
+            --font-ui:      'Syne', sans-serif;
+        }
+
+        *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            min-height: 100vh;
+            background-color: var(--bg-base);
+            background-image:
+                radial-gradient(ellipse 80% 40% at 50% -10%, rgba(63,185,80,0.07) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 30% at 90% 80%, rgba(121,192,255,0.04) 0%, transparent 50%);
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            padding: 32px 20px 64px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .wrap { width:100%; max-width:1440px; }
+
+        .header { margin-bottom:28px; padding-bottom:24px; border-bottom:1px solid var(--border); }
+        .header-top { display:flex; align-items:flex-end; gap:20px; flex-wrap:wrap; margin-bottom:20px; }
+        .logo-mark {
+            display:inline-flex; align-items:center; justify-content:center;
+            width:48px; height:48px; border-radius:12px;
+            background:linear-gradient(135deg,var(--accent-dim),var(--accent));
+            font-family:var(--font-ui); font-weight:800; font-size:1.1rem;
+            color:#0d1117; flex-shrink:0; box-shadow:0 0 20px rgba(63,185,80,0.3);
+        }
+
+        h1 { font-family:var(--font-ui); font-size:2rem; font-weight:800; color:var(--text-primary); letter-spacing:-0.5px; line-height:1; }
+        h1 span { color:var(--accent); }
+        .subtitle { font-family:var(--font-ui); font-size:0.85rem; color:var(--text-muted); letter-spacing:0.5px; margin-top:6px; }
+
+        .tabs {
+            display:flex; gap:4px;
+            background:var(--bg-surface); border:1px solid var(--border);
+            border-radius:var(--radius-pill); padding:4px; width:fit-content;
+        }
+
+        .tab-btn {
+            display:inline-flex; align-items:center; gap:8px;
+            padding:8px 20px; border-radius:var(--radius-pill);
+            border:1px solid transparent; background:none;
+            font-family:var(--font-ui); font-size:0.85rem; font-weight:600;
+            color:var(--text-muted); cursor:pointer; transition:all 0.2s ease; white-space:nowrap;
+        }
+
+        .tab-btn:hover { color:var(--text-secondary); }
+        .tab-btn.active { background:var(--bg-card); color:var(--accent); border-color:var(--border); box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+        .tab-panel { display:none; }
+        .tab-panel.active { display:block; }
+
+        .controls { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+        .reload-btn {
+            display:inline-flex; align-items:center; gap:8px;
+            background:var(--bg-surface); border:1px solid var(--border);
+            color:var(--text-secondary); padding:9px 18px; border-radius:var(--radius-pill);
+            font-family:var(--font-mono); font-size:0.82rem; cursor:pointer; transition:all 0.2s ease; white-space:nowrap;
+        }
+
+        .reload-btn:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
+        .reload-btn .ico { font-size:1rem; display:inline-block; transition:transform 0.5s ease; }
+        .reload-btn:hover .ico { transform:rotate(360deg); }
+
+        #status {
+            display:inline-flex; align-items:center; gap:8px; padding:8px 16px;
+            border-radius:var(--radius-pill); background:var(--bg-surface); border:1px solid var(--border);
+            font-size:0.8rem; color:var(--text-secondary); transition:all 0.3s ease;
+        }
+
+        #status.loaded { border-color:rgba(63,185,80,0.4); color:var(--accent); }
+        #status.error  { border-color:rgba(220,80,80,0.5); color:var(--red); }
+        .count-badge { display:inline-block; background:var(--accent-soft); color:var(--accent); border:1px solid rgba(63,185,80,0.3); font-size:0.75rem; padding:2px 10px; border-radius:var(--radius-pill); margin-left:8px; vertical-align:middle; }
+
+        .search-wrapper { position:relative; }
+        .search-icon { position:absolute; left:16px; top:50%; transform:translateY(-50%); color:var(--text-muted); font-size:1rem; pointer-events:none; transition:color 0.2s; }
+        
+        #searchBox {
+            width:100%; padding:13px 44px 13px 42px;
+            background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-pill);
+            font-family:var(--font-mono); font-size:0.95rem; color:var(--text-primary); outline:none; transition:all 0.2s ease;
+        }
+
+        #searchBox::placeholder { color:var(--text-muted); }
+        #searchBox:focus { border-color:var(--accent-dim); background:var(--bg-card); box-shadow:0 0 0 3px var(--accent-soft); }
+        .search-wrapper:focus-within .search-icon { color:var(--accent); }
+        .clear-btn { position:absolute; right:14px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); font-size:1rem; cursor:pointer; display:none; padding:4px 6px; border-radius:6px; transition:all 0.15s; line-height:1; }
+        .clear-btn:hover { color:var(--red); background:var(--red-soft); }
+
+        .cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(370px,1fr)); gap:14px; margin-top:24px; }
+
+        .opcode-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-card); padding:18px 20px; transition:border-color 0.2s,background 0.2s,box-shadow 0.25s,transform 0.2s; box-shadow:var(--shadow-card); animation:cardIn 0.35s ease-out both; }
+        .opcode-card:hover { border-color:var(--border-hov); background:var(--bg-card-hov); box-shadow:var(--shadow-hov); transform:translateY(-2px); }
+        .opcode-card.unsupported { opacity:0.45; }
+        .card-header { display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+        .opcode-id { font-family:var(--font-mono); font-size:0.78rem; font-weight:700; color:var(--bg-base); background:var(--accent); padding:3px 10px; border-radius:var(--radius-pill); letter-spacing:1px; flex-shrink:0; }
+        .opcode-name { font-family:var(--font-ui); font-size:0.95rem; font-weight:700; color:var(--text-primary); word-break:break-word; flex:1; }
+        .extension-badge { font-size:0.68rem; font-family:var(--font-mono); background:rgba(121,192,255,0.1); color:var(--text-cyan); border:1px solid rgba(121,192,255,0.25); padding:2px 9px; border-radius:var(--radius-pill); margin-left:auto; white-space:nowrap; flex-shrink:0; }
+        .desc { font-size:0.82rem; color:var(--text-secondary); border-left:2px solid var(--accent-dim); padding-left:12px; margin-bottom:14px; line-height:1.5; }
+        .params-title { font-size:0.68rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:7px; }
+        .params-list { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:12px; }
+        .param-item { display:inline-flex; align-items:center; gap:5px; background:var(--bg-surface); border:1px solid rgba(48,100,60,0.4); border-radius:8px; padding:4px 10px; font-size:0.78rem; }
+        .param-direction { color:var(--accent); font-weight:700; }
+        .param-direction.out { color:var(--text-amber); }
+        .param-type { color:var(--text-amber); }
+        .param-source { color:var(--text-muted); font-size:0.72rem; }
+        .param-name  { color:var(--text-secondary); }
+        .param-size  { color:var(--text-muted); font-size:0.7rem; }
+        .attr-chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; }
+        .attr-chip { font-size:0.68rem; font-family:var(--font-mono); background:rgba(210,168,255,0.1); color:var(--text-purple); border:1px solid rgba(210,168,255,0.2); padding:2px 9px; border-radius:var(--radius-pill); }
+        .engine-function { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:12px; padding:8px 12px; background:var(--bg-base); border:1px solid rgba(48,100,60,0.3); border-radius:8px; font-size:0.72rem; color:var(--text-muted); line-height:1.5; }
+        .engine-function-text { word-break:break-all; }
+        .engine-function-text::before { content:'fn '; color:var(--text-green); opacity:0.6; }
+        .copy-btn { flex-shrink:0; background:none; border:1px solid var(--border); color:var(--text-muted); border-radius:6px; width:24px; height:24px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; font-size:0.75rem; transition:all 0.15s ease; padding:0; line-height:1; }
+        .copy-btn:hover { border-color:var(--accent-dim); color:var(--accent); background:var(--accent-soft); }
+        .copy-btn.copied { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
+        .footer-info { margin-top:10px; padding-top:10px; border-top:1px solid rgba(48,100,60,0.3); font-size:0.75rem; color:var(--text-muted); }
+        .empty-state { grid-column:1/-1; text-align:center; padding:80px 20px; color:var(--text-muted); font-size:0.9rem; }
+        .empty-state .big { font-size:2.5rem; margin-bottom:14px; opacity:0.4; }
+
+        .settings-layout {
+            margin-top: 32px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            max-width: 860px;
+        }
+
+        .settings-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 22px 24px;
+        }
+
+        .settings-section.full { grid-column: 1 / -1; }
+        .settings-section.danger { border-color: rgba(248,81,73,0.25); }
+
+        .s-section-title {
+            font-family: var(--font-ui);
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .s-section-title .s-icon { font-size: 0.9rem; opacity: 0.7; }
+
+        .s-field { margin-bottom: 16px; }
+        .s-field:last-child { margin-bottom: 0; }
+
+        .s-label {
+            display: block;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 7px;
+        }
+
+        .s-label .s-hint {
+            font-weight: 400;
+            color: var(--text-muted);
+            margin-left: 8px;
+            font-size: 0.72rem;
+        }
+
+        .s-input {
+            width: 100%;
+            background: var(--bg-base);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            color: var(--text-primary);
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .s-input::placeholder { color: var(--text-muted); }
+        .s-input:focus { border-color: var(--accent-dim); box-shadow: 0 0 0 3px var(--accent-soft); background: var(--bg-surface); }
+        .s-input.error { border-color: rgba(248,81,73,0.6); box-shadow: 0 0 0 3px var(--red-soft); }
+
+        .s-input-row { display: flex; gap: 8px; align-items: center; }
+        .s-input-row .s-input { flex: 1; }
+
+        .s-btn {
+            display: inline-flex; align-items: center; gap: 7px;
+            padding: 10px 18px; border-radius: 10px;
+            font-family: var(--font-mono); font-size: 0.8rem; font-weight: 600;
+            cursor: pointer; transition: all 0.2s ease; white-space: nowrap;
+            border: none;
+        }
+
+        .s-btn.primary { background: var(--accent-dim); color: #0d1117; }
+        .s-btn.primary:hover { background: var(--accent); box-shadow: 0 0 16px rgba(63,185,80,0.35); transform: translateY(-1px); }
+        .s-btn.secondary { background: var(--bg-surface); border: 1px solid var(--border); color: var(--text-secondary); }
+        .s-btn.secondary:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+        .s-btn.danger { background: var(--red-soft); border: 1px solid rgba(248,81,73,0.35); color: var(--red); }
+        .s-btn.danger:hover { background: rgba(248,81,73,0.18); border-color: var(--red); box-shadow: 0 0 12px rgba(248,81,73,0.2); }
+        .s-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+        .s-url-preview {
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: var(--bg-base);
+            border-radius: 8px;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            word-break: break-all;
+            line-height: 1.5;
+            border: 1px solid rgba(48,100,60,0.2);
+            display: none;
+        }
+
+        .s-url-preview.visible { display: block; }
+        .s-url-preview .preview-label { color: var(--text-muted); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 4px; }
+        .s-url-preview .preview-val { color: var(--text-cyan); }
+
+        .s-toggle-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(48,100,60,0.2);
+        }
+
+        .s-toggle-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .s-toggle-row:first-child { padding-top: 0; }
+        .s-toggle-info { flex: 1; }
+        .s-toggle-name { font-size: 0.83rem; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+        .s-toggle-desc { font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; }
+        .s-toggle {
+            position: relative; width: 38px; height: 22px; flex-shrink: 0; margin-left: 16px;
+        }
+
+        .s-toggle input { opacity: 0; width: 0; height: 0; }
+        .s-slider {
+            position: absolute; inset: 0; background: var(--bg-surface);
+            border: 1px solid var(--border); border-radius: 100px; cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .s-slider::before {
+            content: ''; position: absolute; width: 14px; height: 14px;
+            left: 3px; top: 3px; background: var(--text-muted);
+            border-radius: 50%; transition: all 0.2s ease;
+        }
+
+        .s-toggle input:checked + .s-slider { background: var(--accent-soft); border-color: var(--accent-dim); }
+        .s-toggle input:checked + .s-slider::before { transform: translateX(16px); background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+
+        .db-info {
+            display: flex; flex-direction: column; gap: 10px;
+        }
+
+        .db-info-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 14px; background: var(--bg-base);
+            border-radius: 10px; border: 1px solid rgba(48,100,60,0.2);
+            font-size: 0.78rem;
+        }
+
+        .db-info-label { color: var(--text-muted); }
+        .db-info-val { color: var(--text-primary); font-weight: 600; font-family: var(--font-mono); }
+        .db-info-val.green { color: var(--accent); }
+        .db-info-val.red   { color: var(--red); }
+
+        #toast {
+            position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(20px);
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius-pill); padding: 10px 22px;
+            font-size: 0.82rem; color: var(--text-primary);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            opacity: 0; transition: all 0.3s ease; pointer-events: none; white-space: nowrap;
+            z-index: 9999;
+        }
+
+        #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        #toast.success { border-color: rgba(63,185,80,0.5); color: var(--accent); }
+        #toast.error   { border-color: rgba(248,81,73,0.5); color: var(--red); }
+
+        @keyframes cardIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes settingsIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+
+        .settings-section { animation: settingsIn 0.3s ease-out both; }
+        .settings-section:nth-child(2) { animation-delay: 0.05s; }
+        .settings-section:nth-child(3) { animation-delay: 0.1s; }
+
+        .opcode-card:nth-child(1){animation-delay:0.02s}.opcode-card:nth-child(2){animation-delay:0.04s}
+        .opcode-card:nth-child(3){animation-delay:0.06s}.opcode-card:nth-child(4){animation-delay:0.08s}
+        .opcode-card:nth-child(5){animation-delay:0.10s}.opcode-card:nth-child(6){animation-delay:0.12s}
+
+        ::-webkit-scrollbar{width:8px}::-webkit-scrollbar-track{background:var(--bg-base)}
+        ::-webkit-scrollbar-thumb{background:#2d4030;border-radius:10px;border:2px solid var(--bg-base)}
+        ::-webkit-scrollbar-thumb:hover{background:var(--accent-dim)}
+
+        @media(max-width:700px){
+            .settings-layout{grid-template-columns:1fr}
+            .settings-section.full{grid-column:1}
+            body{padding:16px 12px 48px}h1{font-size:1.4rem}.cards-grid{grid-template-columns:1fr;gap:10px}
+        }
+    </style>
+</head>
+<body>
+<div class="wrap">
+
+    <header class="header">
+        <div class="header-top">
+            <div class="logo-mark">DB</div>
+            <div>
+                <h1>GTA Opcode <span>Browser</span></h1>
+                <div class="subtitle">Version 1.0 · by 0xcsd4r</div>
+            </div>
+        </div>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('browser')" id="tab-browser">
+                <span>⊞</span> Opcodes
+            </button>
+            <button class="tab-btn" onclick="switchTab('settings')" id="tab-settings">
+                <span>⚙</span> Settings
+            </button>
+        </div>
+    </header>
+
+    <div class="tab-panel active" id="panel-browser">
+        <div class="controls">
+            <button class="reload-btn" onclick="loadJSON()"><span class="ico">↻</span> Reload database</button>
+            <div id="status">⏳ loading…</div>
+            <span id="countLabel"></span>
+        </div>
+        <div class="search-wrapper">
+            <input type="text" id="searchBox" placeholder="Search by name or hex: WAIT, 0001, 0x01F5…" autofocus>
+            <span class="search-icon">⌕</span>
+            <button class="clear-btn" id="clearBtn" onclick="clearSearch()">✕</button>
+        </div>
+        <div id="results" class="cards-grid"></div>
+    </div>
+
+    <div class="tab-panel" id="panel-settings">
+        <div class="settings-layout">
+
+            <div class="settings-section full">
+                <div class="s-section-title"><span class="s-icon">◎</span> Database Source</div>
+
+                <div class="s-field">
+                    <label class="s-label" for="urlInput">
+                        JSON URL
+                        <span class="s-hint">— opcode database source</span>
+                    </label>
+                    <div class="s-input-row">
+                        <input type="url" id="urlInput" class="s-input" placeholder="https://…">
+                        <button class="s-btn primary" onclick="applyUrl()">Apply &amp; Reload</button>
+                        <button class="s-btn secondary" onclick="resetUrl()">Reset</button>
+                    </div>
+                    <div class="s-url-preview" id="urlPreview">
+                        <span class="preview-label">Active URL</span>
+                        <span class="preview-val" id="urlPreviewVal"></span>
+                    </div>
+                </div>
+
+                <div class="s-field">
+                    <div class="s-label">Preset sources</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                        <button class="s-btn secondary" onclick="setPreset('sa_mobile')">SA Mobile</button>
+                        <button class="s-btn secondary" onclick="setPreset('sa')">SA PC</button>
+                        <button class="s-btn secondary" onclick="setPreset('vc_mobile')">VC Mobile</button>
+                        <button class="s-btn secondary" onclick="setPreset('vc')">VC PC</button>
+                        <button class="s-btn secondary" onclick="setPreset('gta3_mobile')">GTA3 Mobile</button>
+                        <button class="s-btn secondary" onclick="setPreset('gta3')">GTA3 PC</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="s-section-title"><span class="s-icon">◑</span> Display</div>
+
+                <div class="s-toggle-row">
+                    <div class="s-toggle-info">
+                        <div class="s-toggle-name">Show engine function</div>
+                        <div class="s-toggle-desc">The line CRunningScript::XXX under each opcode</div>
+                    </div>
+                    <label class="s-toggle">
+                        <input type="checkbox" id="tog-engineFn" checked onchange="saveSetting('showEngineFn', this.checked); rerenderIfLoaded()">
+                        <span class="s-slider"></span>
+                    </label>
+                </div>
+
+                <div class="s-toggle-row">
+                    <div class="s-toggle-info">
+                        <div class="s-toggle-name">Show parameters</div>
+                        <div class="s-toggle-desc">in/out parameters on the card</div>
+                    </div>
+                    <label class="s-toggle">
+                        <input type="checkbox" id="tog-params" checked onchange="saveSetting('showParams', this.checked); rerenderIfLoaded()">
+                        <span class="s-slider"></span>
+                    </label>
+                </div>
+
+                <div class="s-toggle-row">
+                    <div class="s-toggle-info">
+                        <div class="s-toggle-name">Show description</div>
+                        <div class="s-toggle-desc">Text description (short_desc)</div>
+                    </div>
+                    <label class="s-toggle">
+                        <input type="checkbox" id="tog-desc" checked onchange="saveSetting('showDesc', this.checked); rerenderIfLoaded()">
+                        <span class="s-slider"></span>
+                    </label>
+                </div>
+
+                <div class="s-toggle-row">
+                    <div class="s-toggle-info">
+                        <div class="s-toggle-name">Show unsupported</div>
+                        <div class="s-toggle-desc">Opcodes marked is_unsupported</div>
+                    </div>
+                    <label class="s-toggle">
+                        <input type="checkbox" id="tog-unsupported" checked onchange="saveSetting('showUnsupported', this.checked); rerenderIfLoaded()">
+                        <span class="s-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="s-section-title"><span class="s-icon">◉</span> Database Info</div>
+                <div class="db-info" id="dbInfo">
+                    <div class="db-info-row"><span class="db-info-label">Status</span><span class="db-info-val" id="di-status">—</span></div>
+                    <div class="db-info-row"><span class="db-info-label">Total opcodes</span><span class="db-info-val" id="di-count">—</span></div>
+                    <div class="db-info-row"><span class="db-info-label">Extensions</span><span class="db-info-val" id="di-ext">—</span></div>
+                    <div class="db-info-row"><span class="db-info-label">Unsupported</span><span class="db-info-val" id="di-unsup">—</span></div>
+                    <div class="db-info-row"><span class="db-info-label">Loaded at</span><span class="db-info-val" id="di-time">—</span></div>
+                </div>
+            </div>
+
+            <div class="settings-section full danger">
+                <div class="s-section-title" style="color:var(--red);opacity:0.8"><span class="s-icon">⚠</span> Danger Zone</div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                    <button class="s-btn danger" onclick="clearCache()">Reset All</button>
+                    <span style="font-size:0.75rem;color:var(--text-muted)">Resets all settings and cache to default state</span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+
+    const DEFAULT_URL = 'https://raw.githubusercontent.com/sannybuilder/library/refs/heads/master/sa_mobile/sa_mobile.json';
+    const PRESETS = {
+        sa_mobile: 'https://raw.githubusercontent.com/sannybuilder/library/refs/heads/master/sa_mobile/sa_mobile.json',
+        sa:        'https://raw.githubusercontent.com/sannybuilder/library/refs/heads/master/sa/sa.json',
+        vc_mobile: 'https://raw.githubusercontent.com/sannybuilder/library/refs/heads/master/vc_mobile/vc_mobile.json',
+        vc:        'https://raw.githubusercontent.com/sannybuilder/library/refs/heads/master/vc/vc.json',
+        gta3_mobile:'https://raw.githubusercontent.com/sannybuilder/library/refs/heads/master/gta3_mobile/gta3_mobile.json',
+        gta3:      'https://raw.githubusercontent.com/sannybuilder/library/refs/heads/master/gta3/gta3.json',
+    };
+
+    let OPCODES_BY_NAME = null;
+    let OPCODES_BY_ID   = null;
+    let ALL_OPCODES     = [];
+    let DB_META         = { extCount: 0, unsupCount: 0, loadedAt: null, status: 'idle' };
+    let searchTimer     = null;
+
+    const searchInput = document.getElementById('searchBox');
+    const clearBtn    = document.getElementById('clearBtn');
+    const statusDiv   = document.getElementById('status');
+    const resultsDiv  = document.getElementById('results');
+    const countLabel  = document.getElementById('countLabel');
+
+    function getSetting(key, def) 
+    {
+        const v = localStorage.getItem('saob_' + key);
+
+        if (v === null) return def;
+        if (v === 'true') return true;
+        if (v === 'false') return false;
+
+        return v;
+    }
+
+    window.saveSetting = function(key, val) {
+        localStorage.setItem('saob_' + key, val);
+    };
+
+    function getActiveUrl() {
+        return getSetting('dbUrl', DEFAULT_URL);
+    }
+
+    function initSettingsUI() 
+    {
+        const urlInput = document.getElementById('urlInput');
+        const activeUrl = getActiveUrl();
+        urlInput.value = activeUrl;
+        showUrlPreview(activeUrl);
+
+        const defaults = { showEngineFn: true, showParams: true, showDesc: true, showUnsupported: true };
+        for (const [key, def] of Object.entries(defaults)) {
+            const el = document.getElementById('tog-' + key.replace('show','').toLowerCase());
+            if (el) el.checked = getSetting(key, def);
+        }
+
+        document.getElementById('tog-engineFn').checked    = getSetting('showEngineFn', true);
+        document.getElementById('tog-params').checked      = getSetting('showParams', true);
+        document.getElementById('tog-desc').checked        = getSetting('showDesc', true);
+        document.getElementById('tog-unsupported').checked = getSetting('showUnsupported', true);
+    }
+
+    function showUrlPreview(url) 
+    {
+        const el  = document.getElementById('urlPreview');
+        const val = document.getElementById('urlPreviewVal');
+
+        if (!url || url === DEFAULT_URL) { el.classList.remove('visible'); return; }
+
+        el.classList.add('visible');
+        val.textContent = url;
+    }
+
+    window.applyUrl = function() 
+    {
+        const input = document.getElementById('urlInput');
+        const url   = input.value.trim();
+        if (!url) { showToast('URL не может быть пустым', 'error'); return; }
+        try { new URL(url); } catch { showToast('Некорректный URL', 'error'); input.classList.add('error'); return; }
+        input.classList.remove('error');
+        saveSetting('dbUrl', url);
+        showUrlPreview(url);
+        loadJSON();
+        switchTab('browser');
+        showToast('База обновлена ✓', 'success');
+    };
+
+    window.resetUrl = function() 
+    {
+        localStorage.removeItem('saob_dbUrl');
+        document.getElementById('urlInput').value = DEFAULT_URL;
+        document.getElementById('urlInput').classList.remove('error');
+        showUrlPreview(DEFAULT_URL);
+        loadJSON();
+        showToast('URL resets to default', 'success');
+    };
+
+    window.setPreset = function(key) {
+        const url = PRESETS[key];
+        if (!url) return;
+        document.getElementById('urlInput').value = url;
+        document.getElementById('urlInput').classList.remove('error');
+    };
+
+    window.clearCache = function() {
+        if (!confirm('Reset all settings? The page will reload.')) return;
+        localStorage.clear();
+        location.reload();
+    };
+
+    window.switchTab = function(name) 
+    {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        document.getElementById('tab-' + name).classList.add('active');
+        document.getElementById('panel-' + name).classList.add('active');
+        if (name === 'settings') updateDbInfo();
+    };
+
+    function engineFn(id) 
+    {
+        const s = Math.floor(id / 100) * 100;
+        return `CRunningScript::ProcessCommands${s}To${s + 99}`;
+    }
+
+    window.loadJSON = async function () 
+    {
+        statusDiv.textContent = '⏳ loading…';
+        statusDiv.className = '';
+        DB_META.status = 'loading';
+        const url = getActiveUrl();
+
+        try {
+            const res  = await fetch(url);
+
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+            const json = await res.json();
+
+            OPCODES_BY_NAME = {}; OPCODES_BY_ID = {}; ALL_OPCODES = [];
+            let extCount = 0, unsupCount = 0;
+
+            for (let ext of (json.extensions || [])) 
+            {
+                extCount++;
+
+                for (let cmd of (ext.commands || [])) 
+                {
+                    if (!cmd || !cmd.name) continue;
+
+                    const params = [];
+
+                    (cmd.input  || []).forEach(p => params.push({direction:'in',  ...p, source:p.source||'literal'}));
+                    (cmd.output || []).forEach(p => params.push({direction:'out', ...p, source:p.source||'var_any'}));
+
+                    const id = parseInt(cmd.id, 16);
+
+                    if (cmd.attrs?.is_unsupported) unsupCount++;
+
+                    const op = { id, idHex:cmd.id.toUpperCase(), name:cmd.name, extension:ext.name, params, attrs:cmd.attrs||{}, short_desc:cmd.short_desc||'', class:cmd.class, member:cmd.member, operator:cmd.operator, engineFunc:engineFn(id) };
+                    OPCODES_BY_NAME[cmd.name.toUpperCase()] = op;
+                    OPCODES_BY_ID[id] = op;
+                    ALL_OPCODES.push(op);
+                }
+            }
+
+            DB_META = { extCount, unsupCount, loadedAt: new Date(), status: 'ok' };
+
+            statusDiv.textContent = `✓ ${ALL_OPCODES.length.toLocaleString()} opcodes`;
+            statusDiv.className = 'loaded';
+
+            renderResults(ALL_OPCODES);
+            updateDbInfo();
+        } catch(e) 
+        {
+            DB_META.status = 'error';
+            statusDiv.textContent = '✗ ' + e.message;
+            statusDiv.className = 'error';
+            updateDbInfo();
+        }
+    };
+
+    function updateDbInfo() 
+    {
+        const set = (id, val, cls) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = val;
+            el.className = 'db-info-val' + (cls ? ' ' + cls : '');
+        };
+
+        if (DB_META.status === 'ok') 
+        {
+            set('di-status', 'Loaded', 'green');
+            set('di-count',  ALL_OPCODES.length.toLocaleString());
+            set('di-ext',    DB_META.extCount);
+            set('di-unsup',  DB_META.unsupCount);
+            set('di-time',   DB_META.loadedAt ? DB_META.loadedAt.toLocaleTimeString() : '—');
+        } 
+        else if (DB_META.status === 'error') 
+        {
+            set('di-status', 'Error', 'red');
+            set('di-count', '—'); set('di-ext', '—'); set('di-unsup', '—'); set('di-time', '—');
+        } 
+        else 
+        {
+            set('di-status', '—'); set('di-count', '—'); set('di-ext', '—'); set('di-unsup', '—'); set('di-time', '—');
+        }
+
+        document.getElementById('urlPreviewVal').textContent = getActiveUrl();
+        const isCustom = getActiveUrl() !== DEFAULT_URL;
+        document.getElementById('urlPreview').classList.toggle('visible', isCustom);
+    }
+
+    window.rerenderIfLoaded = function() {
+        if (ALL_OPCODES.length) performSearch();
+    };
+
+    function renderResults(opcodes) 
+    {
+        const showUnsupported = getSetting('showUnsupported', true);
+        const showParams      = getSetting('showParams', true);
+        const showDesc        = getSetting('showDesc', true);
+        const showEngineFn    = getSetting('showEngineFn', true);
+
+        const visible = showUnsupported ? opcodes : opcodes.filter(op => !op.attrs.is_unsupported);
+
+        if (countLabel) {
+            countLabel.innerHTML = visible.length < ALL_OPCODES.length
+                ? `<span class="count-badge">${visible.length} / ${ALL_OPCODES.length}</span>` : '';
+        }
+
+        if (!visible.length) {
+            resultsDiv.innerHTML = `<div class="empty-state"><div class="big">◌</div>No matching opcodes found.</div>`;
+            return;
+        }
+
+        let html = '';
+        for (let op of visible) 
+        {
+            const unsup = op.attrs.is_unsupported ? ' unsupported' : '';
+            let paramsHtml = '';
+
+            if (showParams && op.params.length) 
+            {
+                paramsHtml = `<div class="params-title">Parameters</div><div class="params-list">`;
+                
+                for (let p of op.params) {
+                    const dir = p.direction==='in'?'→':'←', dCls = p.direction==='out'?' out':'';
+                    paramsHtml += `<span class="param-item"><span class="param-direction${dCls}">${dir}</span><span class="param-type">${p.type}</span>${p.source?`<span class="param-source">${p.source}</span>`:''} ${p.name?`<span class="param-name">${p.name}</span>`:''} ${p.size?`<span class="param-size">×${p.size}</span>`:''}</span>`;
+                }
+
+                paramsHtml += '</div>';
+            }
+
+            let attrsHtml = '';
+
+            const al = Object.entries(op.attrs).filter(([k])=>k!=='is_unsupported').map(([k,v])=>v===true?k:`${k}:${v}`);
+            
+            if (al.length) attrsHtml = `<div class="attr-chips">${al.map(a=>`<span class="attr-chip">${a}</span>`).join('')}</div>`;
+            
+            let footer = '';
+            const fp = [op.class&&`class: ${op.class}`, op.member&&`member: ${op.member}`, op.operator&&`op: ${op.operator}`].filter(Boolean);
+            
+            if (fp.length) footer = `<div class="footer-info">${fp.join(' · ')}</div>`;
+
+            const efEsc = op.engineFunc.replace(/'/g,"&#39;");
+            const engineHtml = showEngineFn
+                ? `<div class="engine-function"><span class="engine-function-text">${op.engineFunc}</span><button class="copy-btn" title="Copy" onclick="copyFn(this,'${efEsc}')">⎘</button></div>`
+                : '';
+
+            html += `<div class="opcode-card${unsup}" title="decimal: ${op.id}">
+                <div class="card-header"><span class="opcode-id">${op.idHex}</span><span class="opcode-name">${op.name}</span><span class="extension-badge">${op.extension}</span></div>
+                ${showDesc && op.short_desc ? `<div class="desc">${op.short_desc}</div>` : ''}
+                ${paramsHtml}${attrsHtml}
+                ${engineHtml}
+                ${footer}</div>`;
+        }
+
+        resultsDiv.innerHTML = html;
+    }
+
+    function performSearch() 
+    {
+        const q = searchInput.value.trim();
+        clearBtn.style.display = q ? 'block' : 'none';
+
+        if (!OPCODES_BY_NAME) return;
+        if (!q) { renderResults(ALL_OPCODES); return; }
+
+        const lo = q.toLowerCase(), results = [];
+        let hv = null;
+
+        if (lo.startsWith('0x')) hv = parseInt(lo,16);
+        else if (/^[0-9a-f]+$/i.test(lo)) hv = parseInt(lo,16);
+        if (hv!==null && !isNaN(hv) && OPCODES_BY_ID[hv]) results.push(OPCODES_BY_ID[hv]);
+        for (let op of ALL_OPCODES) if (op.name.toLowerCase().includes(lo) && !results.includes(op)) results.push(op);
+
+        renderResults(results);
+    }
+
+    window.clearSearch = function() 
+    {
+        searchInput.value = '';
+        clearBtn.style.display = 'none';
+        performSearch();
+        searchInput.focus();
+    };
+
+    searchInput.addEventListener('input', ()=>{ clearTimeout(searchTimer); searchTimer=setTimeout(performSearch,200); });
+    searchInput.addEventListener('keydown', e=>{ if(e.key==='Escape') clearSearch(); });
+
+    document.getElementById('urlInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') window.applyUrl();
+    });
+
+    window.copyFn = function(btn, text) {
+        navigator.clipboard.writeText(text).then(()=>{
+            btn.textContent='✓'; btn.classList.add('copied');
+            setTimeout(()=>{ btn.textContent='⎘'; btn.classList.remove('copied'); },1500);
+        });
+    };
+
+    let toastTimer = null;
+    window.showToast = function(msg, type = '') 
+    {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'show' + (type ? ' ' + type : '');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.className = '', 2500);
+    };
+
+    initSettingsUI();
+    loadJSON();
+})();
+
+</script>
+</body>
+</html>
